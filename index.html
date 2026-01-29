@@ -255,6 +255,242 @@
             font-weight: 500;
         }
 
+        /* --- CHAT SECTION --- */
+        .chat-section {
+            margin-top: 40px;
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        .chat-container {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 500px;
+            max-height: 70vh;
+        }
+
+        .chat-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: var(--surface);
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        .message {
+            display: flex;
+            flex-direction: column;
+            max-width: 70%;
+            animation: slideIn 0.2s ease;
+        }
+
+        .message.own {
+            align-self: flex-end;
+            align-items: flex-end;
+        }
+
+        .message.other {
+            align-self: flex-start;
+            align-items: flex-start;
+        }
+
+        .message-header {
+            font-size: 0.75rem;
+            color: var(--text-sub);
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .message-content {
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            word-wrap: break-word;
+        }
+
+        .message.own .message-content {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .message-image, .message-file {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 5px;
+            cursor: pointer;
+        }
+
+        .message-image {
+            max-height: 300px;
+            object-fit: contain;
+        }
+
+        .message-audio {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 8px;
+            margin-top: 5px;
+        }
+
+        .audio-player {
+            flex: 1;
+            height: 32px;
+        }
+
+        .chat-input-area {
+            padding: 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .chat-input-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-radius: 12px;
+            transition: all 0.2s;
+        }
+
+        .chat-input {
+            background: #0f172a;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 0.95rem;
+            resize: none;
+            min-height: 44px;
+            max-height: 120px;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .chat-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+
+        .chat-btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .chat-btn.secondary {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+        }
+
+        .chat-btn.secondary:hover {
+            background: #334155;
+        }
+
+        .chat-btn.recording {
+            background: #ef4444;
+            animation: pulse 1s infinite;
+        }
+
+        .file-preview {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 8px;
+            margin-top: 5px;
+        }
+
+        .file-preview-icon {
+            font-size: 2rem;
+        }
+
+        .file-preview-info {
+            flex: 1;
+        }
+
+        .file-preview-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .file-preview-size {
+            font-size: 0.8rem;
+            color: var(--text-sub);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
+        }
+
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
@@ -344,6 +580,45 @@
                 </div>
             </div>
 
+        </div>
+
+        <!-- CHAT SECTION -->
+        <div class="chat-section">
+            <div class="chat-container">
+                <div class="chat-header">
+                    <span class="panel-title">💬 Live Chat</span>
+                    <span id="chat-device-count" style="font-size: 0.85rem; color: var(--text-sub);">0 devices connected</span>
+                </div>
+                
+                <div class="chat-messages" id="chat-messages">
+                    <div style="text-align: center; color: var(--text-sub); padding: 20px;">
+                        <p>Start chatting with connected devices...</p>
+                    </div>
+                </div>
+
+                <div class="chat-input-area">
+                    <div class="chat-input-wrapper" id="chat-drop-zone">
+                        <input type="file" id="chat-file-input" style="display: none;" accept="image/*,audio/*,video/*">
+                        <textarea 
+                            id="chat-input" 
+                            class="chat-input" 
+                            placeholder="Type a message or drag files here..."
+                            rows="1"
+                        ></textarea>
+                    </div>
+                    <div class="chat-actions">
+                        <button class="chat-btn secondary" id="attach-btn" title="Attach file">
+                            📎
+                        </button>
+                        <button class="chat-btn secondary" id="audio-btn" title="Record audio">
+                            🎤
+                        </button>
+                        <button class="chat-btn" id="send-btn">
+                            Send
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </main>
 
@@ -456,6 +731,7 @@
                 statusBadge.classList.add('connected');
                 const connectedCount = Array.from(connections.values()).filter(c => c.connection.open).length;
                 statusText.textContent = `${connectedCount} Device${connectedCount > 1 ? 's' : ''} Connected`;
+                updateChatDeviceCount();
             });
 
             connection.on('data', (data) => handleIncomingData(data, connId));
@@ -472,6 +748,7 @@
                 } else {
                     statusText.textContent = `${connectedCount} Device${connectedCount > 1 ? 's' : ''} Connected`;
                 }
+                updateChatDeviceCount();
             });
 
             connection.on('error', (err) => {
@@ -602,6 +879,43 @@
                     // Store device fingerprint for this connection
                     connInfo.deviceFingerprint = parsed.deviceFingerprint;
                     connInfo.deviceId = parsed.deviceId;
+                    updateChatDeviceCount();
+                    return;
+                }
+
+                if (parsed.type === 'chat-message') {
+                    // Handle chat message
+                    handleChatMessage(parsed, connInfo);
+                    // Forward to other connections
+                    forwardDataToOthers(data, connId, 'chat');
+                    return;
+                }
+
+                if (parsed.type === 'chat-audio-start') {
+                    // Start receiving audio stream
+                    handleChatAudioStart(parsed, connInfo);
+                    forwardDataToOthers(data, connId, 'chat');
+                    return;
+                }
+
+                if (parsed.type === 'chat-audio-chunk') {
+                    // Receive audio chunk
+                    handleChatAudioChunk(parsed, connInfo);
+                    forwardDataToOthers(data, connId, 'chat');
+                    return;
+                }
+
+                if (parsed.type === 'chat-audio-end') {
+                    // End audio stream
+                    handleChatAudioEnd(parsed, connInfo);
+                    forwardDataToOthers(data, connId, 'chat');
+                    return;
+                }
+
+                if (parsed.type === 'chat-file') {
+                    // Handle chat file (image or other file)
+                    handleChatFile(parsed, connInfo);
+                    forwardDataToOthers(data, connId, 'chat');
                     return;
                 }
                 
@@ -856,10 +1170,393 @@
             return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
         }
 
-        // Drag effects
+        // Drag effects for file upload
         const dz = document.getElementById('drop-zone');
         ['dragenter', 'dragover'].forEach(e => dz.addEventListener(e, () => dz.style.borderColor = 'var(--primary)'));
         ['dragleave', 'drop'].forEach(e => dz.addEventListener(e, () => dz.style.borderColor = 'var(--border)'));
+
+        // Drag effects for chat
+        const chatDz = document.getElementById('chat-drop-zone');
+        ['dragenter', 'dragover'].forEach(e => {
+            chatDz.addEventListener(e, (ev) => {
+                ev.preventDefault();
+                chatDz.style.border = '2px dashed var(--primary)';
+                chatDz.style.background = 'rgba(59, 130, 246, 0.05)';
+            });
+        });
+        ['dragleave', 'drop'].forEach(e => {
+            chatDz.addEventListener(e, (ev) => {
+                ev.preventDefault();
+                chatDz.style.border = 'none';
+                chatDz.style.background = 'transparent';
+            });
+        });
+        chatDz.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                sendChatFile(files[0]);
+            }
+        });
+
+        // --- CHAT FUNCTIONALITY ---
+
+        let chatAudioRecorder = null;
+        let chatAudioChunks = [];
+        let receivingAudioStreams = new Map(); // Track audio streams being received
+        let chatMessageId = 0;
+
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+        const attachBtn = document.getElementById('attach-btn');
+        const audioBtn = document.getElementById('audio-btn');
+        const chatFileInput = document.getElementById('chat-file-input');
+
+        // Auto-resize textarea
+        chatInput.addEventListener('input', () => {
+            chatInput.style.height = 'auto';
+            chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+        });
+
+        // Send text message
+        sendBtn.addEventListener('click', sendChatMessage);
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChatMessage();
+            }
+        });
+
+        // Attach file
+        attachBtn.addEventListener('click', () => chatFileInput.click());
+        chatFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) sendChatFile(file);
+        });
+
+        // Audio recording
+        let isRecording = false;
+        audioBtn.addEventListener('mousedown', startAudioRecording);
+        audioBtn.addEventListener('mouseup', stopAudioRecording);
+        audioBtn.addEventListener('mouseleave', stopAudioRecording);
+        audioBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startAudioRecording();
+        });
+        audioBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            stopAudioRecording();
+        });
+
+        function updateChatDeviceCount() {
+            const count = Array.from(connections.values()).filter(c => c.connection.open).length;
+            document.getElementById('chat-device-count').textContent = `${count} device${count !== 1 ? 's' : ''} connected`;
+        }
+
+        function sendChatMessage() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+
+            const messageId = `msg_${Date.now()}_${chatMessageId++}`;
+            const message = {
+                type: 'chat-message',
+                messageId: messageId,
+                text: text,
+                timestamp: Date.now(),
+                senderFingerprint: myDeviceFingerprint,
+                senderId: myId
+            };
+
+            // Display own message
+            displayChatMessage(message, true);
+
+            // Send to all connections
+            const openConnections = Array.from(connections.values()).filter(c => c.connection.open);
+            openConnections.forEach((connInfo) => {
+                if (connInfo.connection.open) {
+                    try {
+                        connInfo.connection.send(JSON.stringify(message));
+                    } catch (err) {
+                        console.error('Error sending chat message:', err);
+                    }
+                }
+            });
+
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+        }
+
+        function sendChatFile(file) {
+            const messageId = `msg_${Date.now()}_${chatMessageId++}`;
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                const fileData = e.target.result;
+                const isImage = file.type.startsWith('image/');
+                const isAudio = file.type.startsWith('audio/');
+                const isVideo = file.type.startsWith('video/');
+
+                const message = {
+                    type: 'chat-file',
+                    messageId: messageId,
+                    fileName: file.name,
+                    fileType: file.type,
+                    fileSize: file.size,
+                    fileData: fileData, // Base64 encoded
+                    isImage: isImage,
+                    isAudio: isAudio,
+                    isVideo: isVideo,
+                    timestamp: Date.now(),
+                    senderFingerprint: myDeviceFingerprint,
+                    senderId: myId
+                };
+
+                // Display own file
+                displayChatFile(message, true);
+
+                // Send to all connections
+                const openConnections = Array.from(connections.values()).filter(c => c.connection.open);
+                openConnections.forEach((connInfo) => {
+                    if (connInfo.connection.open) {
+                        try {
+                            connInfo.connection.send(JSON.stringify(message));
+                        } catch (err) {
+                            console.error('Error sending chat file:', err);
+                        }
+                    }
+                });
+            };
+
+            reader.readAsDataURL(file);
+            chatFileInput.value = '';
+        }
+
+        async function startAudioRecording() {
+            if (isRecording) return;
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Try to use Opus codec if available
+                const options = {
+                    mimeType: 'audio/webm;codecs=opus'
+                };
+                
+                // Check if Opus is supported, fallback to default
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    options.mimeType = 'audio/webm'; // Fallback
+                }
+
+                chatAudioRecorder = new MediaRecorder(stream, options);
+                chatAudioChunks = [];
+                isRecording = true;
+
+                audioBtn.classList.add('recording');
+                audioBtn.textContent = '🔴 Recording...';
+
+                chatAudioRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) {
+                        chatAudioChunks.push(e.data);
+                    }
+                };
+
+                chatAudioRecorder.onstop = () => {
+                    stream.getTracks().forEach(track => track.stop());
+                    sendAudioMessage();
+                };
+
+                chatAudioRecorder.start(100); // Collect data every 100ms for streaming
+            } catch (err) {
+                console.error('Error starting audio recording:', err);
+                alert('Could not access microphone. Please check permissions.');
+                isRecording = false;
+            }
+        }
+
+        function stopAudioRecording() {
+            if (!isRecording || !chatAudioRecorder) return;
+            
+            isRecording = false;
+            audioBtn.classList.remove('recording');
+            audioBtn.textContent = '🎤';
+
+            if (chatAudioRecorder.state !== 'inactive') {
+                chatAudioRecorder.stop();
+            }
+        }
+
+        function sendAudioMessage() {
+            if (chatAudioChunks.length === 0) return;
+
+            const messageId = `audio_${Date.now()}_${chatMessageId++}`;
+            const blob = new Blob(chatAudioChunks, { type: chatAudioRecorder.mimeType || 'audio/webm' });
+
+            // Convert to base64 for transmission
+            const reader = new FileReader();
+            reader.onload = () => {
+                const audioData = reader.result;
+
+                const message = {
+                    type: 'chat-audio-start',
+                    messageId: messageId,
+                    audioData: audioData,
+                    mimeType: chatAudioRecorder.mimeType || 'audio/webm',
+                    timestamp: Date.now(),
+                    senderFingerprint: myDeviceFingerprint,
+                    senderId: myId
+                };
+
+                // Display own audio message
+                displayChatAudio(message, true);
+
+                // Send to all connections
+                const openConnections = Array.from(connections.values()).filter(c => c.connection.open);
+                openConnections.forEach((connInfo) => {
+                    if (connInfo.connection.open) {
+                        try {
+                            connInfo.connection.send(JSON.stringify(message));
+                        } catch (err) {
+                            console.error('Error sending audio message:', err);
+                        }
+                    }
+                });
+            };
+
+            reader.readAsDataURL(blob);
+            chatAudioChunks = [];
+        }
+
+        function handleChatMessage(parsed, connInfo) {
+            displayChatMessage(parsed, false);
+        }
+
+        function handleChatFile(parsed, connInfo) {
+            displayChatFile(parsed, false);
+        }
+
+        function handleChatAudioStart(parsed, connInfo) {
+            displayChatAudio(parsed, false);
+        }
+
+        function handleChatAudioChunk(parsed, connInfo) {
+            // Handle streaming audio chunks if needed
+        }
+
+        function handleChatAudioEnd(parsed, connInfo) {
+            // Handle audio stream end
+        }
+
+        function displayChatMessage(message, isOwn) {
+            // Remove placeholder if exists
+            const placeholder = chatMessages.querySelector('div[style*="text-align: center"]');
+            if (placeholder) placeholder.remove();
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isOwn ? 'own' : 'other'}`;
+            messageDiv.dataset.messageId = message.messageId;
+
+            const senderName = isOwn ? 'You' : (message.senderFingerprint || 'Unknown').substring(0, 8);
+            const time = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            messageDiv.innerHTML = `
+                <div class="message-header">
+                    <span>${escapeHtml(senderName)}</span>
+                    <span>${time}</span>
+                </div>
+                <div class="message-content">
+                    ${escapeHtml(message.text).replace(/\n/g, '<br>')}
+                </div>
+            `;
+
+            chatMessages.appendChild(messageDiv);
+            scrollChatToBottom();
+        }
+
+        function displayChatFile(message, isOwn) {
+            const placeholder = chatMessages.querySelector('div[style*="text-align: center"]');
+            if (placeholder) placeholder.remove();
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isOwn ? 'own' : 'other'}`;
+            messageDiv.dataset.messageId = message.messageId;
+
+            const senderName = isOwn ? 'You' : (message.senderFingerprint || 'Unknown').substring(0, 8);
+            const time = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            let content = '';
+            if (message.isImage) {
+                content = `<img src="${message.fileData}" alt="${escapeHtml(message.fileName)}" class="message-image" onclick="window.open(this.src, '_blank')">`;
+            } else if (message.isVideo) {
+                content = `<video src="${message.fileData}" controls class="message-image" style="max-width: 100%; max-height: 300px;"></video>`;
+            } else {
+                content = `
+                    <div class="file-preview">
+                        <div class="file-preview-icon">📄</div>
+                        <div class="file-preview-info">
+                            <div class="file-preview-name">${escapeHtml(message.fileName)}</div>
+                            <div class="file-preview-size">${formatBytes(message.fileSize)}</div>
+                        </div>
+                        <a href="${message.fileData}" download="${message.fileName}" class="chat-btn" style="padding: 8px 12px; font-size: 0.85rem;">⬇</a>
+                    </div>
+                `;
+            }
+
+            messageDiv.innerHTML = `
+                <div class="message-header">
+                    <span>${escapeHtml(senderName)}</span>
+                    <span>${time}</span>
+                </div>
+                <div class="message-content">
+                    ${content}
+                </div>
+            `;
+
+            chatMessages.appendChild(messageDiv);
+            scrollChatToBottom();
+        }
+
+        function displayChatAudio(message, isOwn) {
+            const placeholder = chatMessages.querySelector('div[style*="text-align: center"]');
+            if (placeholder) placeholder.remove();
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isOwn ? 'own' : 'other'}`;
+            messageDiv.dataset.messageId = message.messageId;
+
+            const senderName = isOwn ? 'You' : (message.senderFingerprint || 'Unknown').substring(0, 8);
+            const time = new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const audioId = `audio_${message.messageId}`;
+            messageDiv.innerHTML = `
+                <div class="message-header">
+                    <span>${escapeHtml(senderName)}</span>
+                    <span>${time}</span>
+                </div>
+                <div class="message-content">
+                    <div class="message-audio">
+                        <audio id="${audioId}" controls class="audio-player">
+                            <source src="${message.audioData}" type="${message.mimeType}">
+                            Your browser does not support audio playback.
+                        </audio>
+                    </div>
+                </div>
+            `;
+
+            chatMessages.appendChild(messageDiv);
+            
+            // Auto-play if it's from others (optional - you can remove this)
+            const audio = document.getElementById(audioId);
+            if (audio && !isOwn) {
+                // Don't auto-play, let user control
+            }
+            
+            scrollChatToBottom();
+        }
+
+        function scrollChatToBottom() {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
 
     </script>
 </body>
