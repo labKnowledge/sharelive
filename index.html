@@ -152,6 +152,33 @@
             padding: 20px;
             margin-bottom: 20px;
         }
+
+        #files-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-height: 600px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        #files-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #files-list::-webkit-scrollbar-track {
+            background: var(--surface);
+            border-radius: 4px;
+        }
+
+        #files-list::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        #files-list::-webkit-scrollbar-thumb:hover {
+            background: var(--primary);
+        }
         
         .file-meta { margin-bottom: 15px; }
         .file-name { font-weight: 600; font-size: 1.1rem; margin-bottom: 5px; word-break: break-all; }
@@ -255,9 +282,9 @@
 
         <div id="host-controls" style="display: none;">
             <div class="link-display" id="share-link"></div>
-            <button class="action-btn" onclick="copyLink()">Copy Link to Clipboard</button>
+            <button class="action-btn" id="share-btn" onclick="shareLink()">Share Link</button>
             <p style="margin-top: 20px; font-size: 0.9rem; color: var(--text-sub);">
-                Send this link to the other person. Once they click it, you will be connected.
+                Share this link with the other person. Once they open it, you will be connected.
             </p>
         </div>
     </section>
@@ -311,30 +338,9 @@
                     <p>Waiting for files...</p>
                 </div>
 
-                <!-- Download Card (Hidden by default) -->
-                <div id="download-card" style="display: none; height: 100%; flex-direction: column; justify-content: center;">
-                    <div class="file-card">
-                        <div class="file-meta">
-                            <div class="file-name" id="recv-name">incoming.zip</div>
-                            <div class="file-size" id="recv-size">Calculating...</div>
-                        </div>
-                        
-                        <!-- Receiving Progress -->
-                        <div class="progress-container" id="recv-progress-container">
-                            <div class="progress-labels">
-                                <span id="recv-status">Receiving...</span>
-                                <span id="recv-percent">0%</span>
-                            </div>
-                            <div class="progress-track">
-                                <div class="progress-fill" id="recv-bar"></div>
-                            </div>
-                        </div>
-
-                        <!-- Download Action -->
-                        <a href="#" id="download-link" class="download-btn" style="display: none; margin-top: 15px;">
-                            ⬇ Download Now
-                        </a>
-                    </div>
+                <!-- Files List Container -->
+                <div id="files-list" style="display: none; flex: 1; overflow-y: auto;">
+                    <!-- Files will be dynamically added here -->
                 </div>
             </div>
 
@@ -345,8 +351,9 @@
         // --- Configuration ---
         const CHUNK_SIZE = 16 * 1024; // 16KB
         let peer;
-        let conn;
+        let connections = new Map(); // Map of connectionId -> connection object
         let myId;
+        let filesByConnection = new Map(); // Map of connectionId -> array of file objects
 
         // --- Elements ---
         const onboarding = document.getElementById('onboarding');
@@ -378,11 +385,7 @@
         });
 
         peer.on('connection', (c) => {
-            // Host receiving connection
-            if (conn && conn.open) {
-                c.close(); 
-                return;
-            }
+            // Host receiving connection - allow multiple connections
             setupConnection(c);
         });
 
@@ -398,19 +401,39 @@
         }
 
         function setupConnection(connection) {
-            conn = connection;
+            const connId = connection.peer || connection.connectionId || `conn_${Date.now()}_${Math.random()}`;
+            connections.set(connId, connection);
+            filesByConnection.set(connId, []);
 
-            conn.on('open', () => {
+            connection.on('open', () => {
                 onboarding.style.display = 'none';
                 transferUI.style.display = 'block';
                 statusBadge.classList.add('connected');
-                statusText.textContent = "Connected Securely";
+                const connectedCount = Array.from(connections.values()).filter(c => c.open).length;
+                statusText.textContent = `${connectedCount} Device${connectedCount > 1 ? 's' : ''} Connected`;
             });
 
-            conn.on('data', handleIncomingData);
-            conn.on('close', () => {
-                alert("Peer disconnected");
-                location.reload();
+            connection.on('data', (data) => handleIncomingData(data, connId));
+            connection.on('close', () => {
+                // Remove all files from this connection
+                removeFilesFromConnection(connId);
+                connections.delete(connId);
+                filesByConnection.delete(connId);
+                
+                const connectedCount = Array.from(connections.values()).filter(c => c.open).length;
+                if (connectedCount === 0) {
+                    statusText.textContent = "Disconnected";
+                    statusBadge.classList.remove('connected');
+                } else {
+                    statusText.textContent = `${connectedCount} Device${connectedCount > 1 ? 's' : ''} Connected`;
+                }
+            });
+
+            connection.on('error', (err) => {
+                console.error('Connection error:', err);
+                removeFilesFromConnection(connId);
+                connections.delete(connId);
+                filesByConnection.delete(connId);
             });
         }
 
@@ -426,27 +449,62 @@
         });
 
         function uploadFile(file) {
+            // Get all open connections
+            const openConnections = Array.from(connections.values()).filter(c => c.open);
+            if (openConnections.length === 0) {
+                alert("No active connections. Please wait for a peer to connect.");
+                return;
+            }
+
             // UI Update
             document.getElementById('drop-zone').style.display = 'none';
             document.getElementById('upload-progress').style.display = 'block';
             document.getElementById('upload-filename').textContent = file.name;
             document.getElementById('upload-filesize').textContent = formatBytes(file.size);
 
-            // 1. Send Metadata
-            conn.send(JSON.stringify({
-                type: 'metadata',
-                name: file.name,
-                size: file.size,
-                fileType: file.type
-            }));
+            // Send to all connected peers
+            const totalConnections = openConnections.length;
+            let completedCount = 0;
+            const connectionProgress = new Map();
 
-            // 2. Send Chunks
+            // Initialize progress tracking for each connection
+            openConnections.forEach((conn) => {
+                connectionProgress.set(conn, 0);
+            });
+
+            // Send metadata to all connections
+            openConnections.forEach((conn) => {
+                if (conn.open) {
+                    conn.send(JSON.stringify({
+                        type: 'metadata',
+                        name: file.name,
+                        size: file.size,
+                        fileType: file.type
+                    }));
+                }
+            });
+
+            // Read file once and send chunks to all connections
             const reader = new FileReader();
             let offset = 0;
 
             reader.onload = (e) => {
-                conn.send(e.target.result);
-                offset += e.target.result.byteLength;
+                const chunk = e.target.result;
+                
+                // Send chunk to all open connections
+                openConnections.forEach((conn) => {
+                    if (conn.open) {
+                        try {
+                            conn.send(chunk);
+                            const currentProgress = connectionProgress.get(conn) || 0;
+                            connectionProgress.set(conn, currentProgress + chunk.byteLength);
+                        } catch (err) {
+                            console.error('Error sending chunk:', err);
+                        }
+                    }
+                });
+
+                offset += chunk.byteLength;
                 
                 // Update Progress UI
                 const percent = Math.min(100, Math.floor((offset / file.size) * 100));
@@ -456,7 +514,7 @@
                 if (offset < file.size) {
                     readSlice(offset);
                 } else {
-                    document.getElementById('upload-status').textContent = "Sent!";
+                    document.getElementById('upload-status').textContent = `Sent to ${totalConnections} device${totalConnections > 1 ? 's' : ''}!`;
                     setTimeout(resetUploadUI, 2000);
                 }
             };
@@ -478,64 +536,182 @@
 
         // --- DOWNLOAD LOGIC ---
 
-        let receiveBuffer = [];
-        let receivedSize = 0;
-        let fileMeta = null;
+        function handleIncomingData(data, connId) {
+            let files = filesByConnection.get(connId) || [];
+            let currentFile = files.find(f => f.status === 'receiving') || null;
 
-        function handleIncomingData(data) {
             if (typeof data === 'string') {
                 // Metadata Start
                 const parsed = JSON.parse(data);
                 if (parsed.type === 'metadata') {
-                    fileMeta = parsed;
-                    receivedSize = 0;
-                    receiveBuffer = [];
+                    // Create new file entry
+                    const fileId = `file_${Date.now()}_${Math.random()}`;
+                    currentFile = {
+                        id: fileId,
+                        connId: connId,
+                        name: parsed.name,
+                        size: parsed.size,
+                        fileType: parsed.fileType,
+                        receivedSize: 0,
+                        buffer: [],
+                        status: 'receiving',
+                        element: null
+                    };
+                    files.push(currentFile);
+                    filesByConnection.set(connId, files);
                     
-                    // Show Download UI
+                    // Create UI element for this file
+                    createFileCard(currentFile);
+                    
+                    // Show files list
                     document.getElementById('empty-state').style.display = 'none';
-                    document.getElementById('download-card').style.display = 'flex';
-                    document.getElementById('recv-name').textContent = fileMeta.name;
-                    document.getElementById('recv-size').textContent = formatBytes(fileMeta.size);
-                    document.getElementById('recv-progress-container').style.display = 'block';
-                    document.getElementById('download-link').style.display = 'none';
+                    document.getElementById('files-list').style.display = 'block';
                 }
-            } else {
+            } else if (currentFile) {
                 // Binary Chunk
-                receiveBuffer.push(data);
-                receivedSize += data.byteLength;
+                currentFile.buffer.push(data);
+                currentFile.receivedSize += data.byteLength;
 
-                const percent = Math.min(100, Math.floor((receivedSize / fileMeta.size) * 100));
-                document.getElementById('recv-bar').style.width = percent + '%';
-                document.getElementById('recv-percent').textContent = percent + '%';
+                const percent = Math.min(100, Math.floor((currentFile.receivedSize / currentFile.size) * 100));
+                updateFileProgress(currentFile, percent);
 
-                if (receivedSize === fileMeta.size) {
-                    finalizeDownload();
+                if (currentFile.receivedSize === currentFile.size) {
+                    finalizeDownload(currentFile);
                 }
             }
         }
 
-        function finalizeDownload() {
-            document.getElementById('recv-status').textContent = "Complete";
+        function createFileCard(file) {
+            const filesList = document.getElementById('files-list');
+            const fileCard = document.createElement('div');
+            fileCard.className = 'file-card';
+            fileCard.id = `file-card-${file.id}`;
             
-            const blob = new Blob(receiveBuffer, { type: fileMeta.fileType });
+            const deviceInfo = connections.get(file.connId)?.peer || 'Unknown Device';
+            
+            fileCard.innerHTML = `
+                <div class="file-meta">
+                    <div class="file-name">${escapeHtml(file.name)}</div>
+                    <div class="file-size">${formatBytes(file.size)}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-sub); margin-top: 5px;">
+                        From: ${deviceInfo.substring(0, 8)}...
+                    </div>
+                </div>
+                
+                <div class="progress-container" id="progress-${file.id}">
+                    <div class="progress-labels">
+                        <span id="status-${file.id}">Receiving...</span>
+                        <span id="percent-${file.id}">0%</span>
+                    </div>
+                    <div class="progress-track">
+                        <div class="progress-fill" id="bar-${file.id}"></div>
+                    </div>
+                </div>
+
+                <a href="#" id="download-link-${file.id}" class="download-btn" style="display: none; margin-top: 15px;">
+                    ⬇ Download Now
+                </a>
+            `;
+            
+            filesList.appendChild(fileCard);
+            file.element = fileCard;
+        }
+
+        function updateFileProgress(file, percent) {
+            const bar = document.getElementById(`bar-${file.id}`);
+            const percentEl = document.getElementById(`percent-${file.id}`);
+            if (bar) bar.style.width = percent + '%';
+            if (percentEl) percentEl.textContent = percent + '%';
+        }
+
+        function finalizeDownload(file) {
+            const statusEl = document.getElementById(`status-${file.id}`);
+            if (statusEl) statusEl.textContent = "Complete";
+            
+            const blob = new Blob(file.buffer, { type: file.fileType });
             const url = URL.createObjectURL(blob);
             
-            const dlBtn = document.getElementById('download-link');
-            dlBtn.href = url;
-            dlBtn.download = fileMeta.name;
-            dlBtn.style.display = 'flex';
+            const dlBtn = document.getElementById(`download-link-${file.id}`);
+            if (dlBtn) {
+                dlBtn.href = url;
+                dlBtn.download = file.name;
+                dlBtn.style.display = 'flex';
+            }
             
-            receiveBuffer = [];
+            file.status = 'complete';
+        }
+
+        function removeFilesFromConnection(connId) {
+            const files = filesByConnection.get(connId) || [];
+            files.forEach(file => {
+                if (file.element) {
+                    file.element.remove();
+                }
+            });
+            
+            // Check if we should show empty state
+            const allFiles = Array.from(filesByConnection.values()).flat();
+            if (allFiles.length === 0) {
+                document.getElementById('empty-state').style.display = 'flex';
+                document.getElementById('files-list').style.display = 'none';
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         // --- UTILS ---
-        function copyLink() {
-            const text = document.getElementById('share-link').textContent;
-            navigator.clipboard.writeText(text);
-            const btn = document.querySelector('#host-controls button');
-            const original = btn.textContent;
-            btn.textContent = "Copied!";
-            setTimeout(() => btn.textContent = original, 2000);
+        async function shareLink() {
+            const shareUrl = document.getElementById('share-link').textContent;
+            const btn = document.getElementById('share-btn');
+            const originalText = btn.textContent;
+
+            // Check if Web Share API is available
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: 'DropShare - Secure P2P File Transfer',
+                        text: 'Join me for a secure peer-to-peer file transfer',
+                        url: shareUrl
+                    });
+                    btn.textContent = "Shared!";
+                    setTimeout(() => btn.textContent = originalText, 2000);
+                } catch (err) {
+                    // User cancelled or error occurred, fallback to copy
+                    if (err.name !== 'AbortError') {
+                        console.error('Share failed:', err);
+                        fallbackCopy(shareUrl, btn, originalText);
+                    }
+                }
+            } else {
+                // Fallback to clipboard copy if Web Share API is not available
+                fallbackCopy(shareUrl, btn, originalText);
+            }
+        }
+
+        async function fallbackCopy(text, btn, originalText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                btn.textContent = "Copied!";
+                setTimeout(() => btn.textContent = originalText, 2000);
+            } catch (err) {
+                console.error('Copy failed:', err);
+                // Last resort: select text for manual copy
+                const linkEl = document.getElementById('share-link');
+                const range = document.createRange();
+                range.selectNodeContents(linkEl);
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+                btn.textContent = "Select & Copy";
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    selection.removeAllRanges();
+                }, 2000);
+            }
         }
 
         function formatBytes(bytes, decimals = 2) {
