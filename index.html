@@ -282,7 +282,7 @@
 
         <div id="host-controls" style="display: none;">
             <div class="link-display" id="share-link"></div>
-            <button class="action-btn" id="share-btn" onclick="shareLink()">Share Link</button>
+            <button class="action-btn" id="share-btn" onclick="shareLink(event)">Share Link</button>
             <p style="margin-top: 20px; font-size: 0.9rem; color: var(--text-sub);">
                 Share this link with the other person. Once they open it, you will be connected.
             </p>
@@ -351,9 +351,39 @@
         // --- Configuration ---
         const CHUNK_SIZE = 16 * 1024; // 16KB
         let peer;
-        let connections = new Map(); // Map of connectionId -> connection object
+        let connections = new Map(); // Map of connectionId -> {connection, deviceId, deviceFingerprint}
         let myId;
+        let myDeviceFingerprint;
         let filesByConnection = new Map(); // Map of connectionId -> array of file objects
+        let processedFileIds = new Set(); // Track files to prevent duplicates
+        let forwardingFiles = new Map(); // Track files being forwarded: fileId -> Set of connectionIds that have received it
+
+        // Generate device fingerprint
+        function generateDeviceFingerprint() {
+            // Use existing fingerprint from localStorage or generate new one
+            let fingerprint = localStorage.getItem('deviceFingerprint');
+            if (!fingerprint) {
+                // Generate a unique fingerprint based on various device characteristics
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                ctx.textBaseline = 'top';
+                ctx.font = '14px Arial';
+                ctx.fillText('Device fingerprint', 2, 2);
+                const canvasFingerprint = canvas.toDataURL();
+                
+                const screenInfo = `${screen.width}x${screen.height}x${screen.colorDepth}`;
+                const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                const language = navigator.language;
+                
+                // Create a hash-like identifier
+                const combined = `${canvasFingerprint}-${screenInfo}-${timezone}-${language}-${navigator.userAgent}`;
+                fingerprint = btoa(combined).substring(0, 16).replace(/[^a-zA-Z0-9]/g, '');
+                localStorage.setItem('deviceFingerprint', fingerprint);
+            }
+            return fingerprint;
+        }
+
+        myDeviceFingerprint = generateDeviceFingerprint();
 
         // --- Elements ---
         const onboarding = document.getElementById('onboarding');
@@ -402,14 +432,29 @@
 
         function setupConnection(connection) {
             const connId = connection.peer || connection.connectionId || `conn_${Date.now()}_${Math.random()}`;
-            connections.set(connId, connection);
+            const deviceId = connection.peer || 'unknown';
+            
+            // Store connection with device info
+            connections.set(connId, {
+                connection: connection,
+                deviceId: deviceId,
+                deviceFingerprint: null // Will be set when we receive their fingerprint
+            });
             filesByConnection.set(connId, []);
 
+            // Send our device fingerprint when connection opens
             connection.on('open', () => {
+                // Send our device info
+                connection.send(JSON.stringify({
+                    type: 'device-info',
+                    deviceFingerprint: myDeviceFingerprint,
+                    deviceId: myId
+                }));
+
                 onboarding.style.display = 'none';
                 transferUI.style.display = 'block';
                 statusBadge.classList.add('connected');
-                const connectedCount = Array.from(connections.values()).filter(c => c.open).length;
+                const connectedCount = Array.from(connections.values()).filter(c => c.connection.open).length;
                 statusText.textContent = `${connectedCount} Device${connectedCount > 1 ? 's' : ''} Connected`;
             });
 
@@ -420,7 +465,7 @@
                 connections.delete(connId);
                 filesByConnection.delete(connId);
                 
-                const connectedCount = Array.from(connections.values()).filter(c => c.open).length;
+                const connectedCount = Array.from(connections.values()).filter(c => c.connection.open).length;
                 if (connectedCount === 0) {
                     statusText.textContent = "Disconnected";
                     statusBadge.classList.remove('connected');
@@ -450,11 +495,15 @@
 
         function uploadFile(file) {
             // Get all open connections
-            const openConnections = Array.from(connections.values()).filter(c => c.open);
+            const openConnections = Array.from(connections.values()).filter(c => c.connection.open);
             if (openConnections.length === 0) {
                 alert("No active connections. Please wait for a peer to connect.");
                 return;
             }
+
+            // Generate unique file ID to track this file
+            const fileId = `file_${Date.now()}_${Math.random()}`;
+            processedFileIds.add(fileId);
 
             // UI Update
             document.getElementById('drop-zone').style.display = 'none';
@@ -468,18 +517,21 @@
             const connectionProgress = new Map();
 
             // Initialize progress tracking for each connection
-            openConnections.forEach((conn) => {
-                connectionProgress.set(conn, 0);
+            openConnections.forEach((connInfo) => {
+                connectionProgress.set(connInfo, 0);
             });
 
-            // Send metadata to all connections
-            openConnections.forEach((conn) => {
-                if (conn.open) {
-                    conn.send(JSON.stringify({
+            // Send metadata to all connections with file ID and source device info
+            openConnections.forEach((connInfo) => {
+                if (connInfo.connection.open) {
+                    connInfo.connection.send(JSON.stringify({
                         type: 'metadata',
+                        fileId: fileId,
                         name: file.name,
                         size: file.size,
-                        fileType: file.type
+                        fileType: file.type,
+                        sourceDeviceFingerprint: myDeviceFingerprint,
+                        sourceDeviceId: myId
                     }));
                 }
             });
@@ -492,12 +544,12 @@
                 const chunk = e.target.result;
                 
                 // Send chunk to all open connections
-                openConnections.forEach((conn) => {
-                    if (conn.open) {
+                openConnections.forEach((connInfo) => {
+                    if (connInfo.connection.open) {
                         try {
-                            conn.send(chunk);
-                            const currentProgress = connectionProgress.get(conn) || 0;
-                            connectionProgress.set(conn, currentProgress + chunk.byteLength);
+                            connInfo.connection.send(chunk);
+                            const currentProgress = connectionProgress.get(connInfo) || 0;
+                            connectionProgress.set(connInfo, currentProgress + chunk.byteLength);
                         } catch (err) {
                             console.error('Error sending chunk:', err);
                         }
@@ -537,15 +589,40 @@
         // --- DOWNLOAD LOGIC ---
 
         function handleIncomingData(data, connId) {
+            const connInfo = connections.get(connId);
+            if (!connInfo) return;
+
             let files = filesByConnection.get(connId) || [];
             let currentFile = files.find(f => f.status === 'receiving') || null;
 
             if (typeof data === 'string') {
-                // Metadata Start
                 const parsed = JSON.parse(data);
+                
+                if (parsed.type === 'device-info') {
+                    // Store device fingerprint for this connection
+                    connInfo.deviceFingerprint = parsed.deviceFingerprint;
+                    connInfo.deviceId = parsed.deviceId;
+                    return;
+                }
+                
                 if (parsed.type === 'metadata') {
+                    const fileId = parsed.fileId || `file_${Date.now()}_${Math.random()}`;
+                    
+                    // Check if we've already processed this file (prevent duplicates)
+                    if (processedFileIds.has(fileId)) {
+                        // This file was already received from another connection, just forward
+                        forwardDataToOthers(data, connId, fileId);
+                        return;
+                    }
+                    
+                    processedFileIds.add(fileId);
+                    forwardingFiles.set(fileId, new Set([connId])); // Track that sender has this file
+                    
+                    // Get source device info
+                    const sourceFingerprint = parsed.sourceDeviceFingerprint || connInfo.deviceFingerprint || connInfo.deviceId || 'Unknown';
+                    const sourceDeviceId = parsed.sourceDeviceId || connInfo.deviceId || 'Unknown';
+                    
                     // Create new file entry
-                    const fileId = `file_${Date.now()}_${Math.random()}`;
                     currentFile = {
                         id: fileId,
                         connId: connId,
@@ -555,7 +632,9 @@
                         receivedSize: 0,
                         buffer: [],
                         status: 'receiving',
-                        element: null
+                        element: null,
+                        sourceDeviceFingerprint: sourceFingerprint,
+                        sourceDeviceId: sourceDeviceId
                     };
                     files.push(currentFile);
                     filesByConnection.set(connId, files);
@@ -566,6 +645,9 @@
                     // Show files list
                     document.getElementById('empty-state').style.display = 'none';
                     document.getElementById('files-list').style.display = 'block';
+                    
+                    // Forward metadata to all other connections (broadcast)
+                    forwardDataToOthers(data, connId, fileId);
                 }
             } else if (currentFile) {
                 // Binary Chunk
@@ -577,8 +659,51 @@
 
                 if (currentFile.receivedSize === currentFile.size) {
                     finalizeDownload(currentFile);
+                    // Clean up forwarding tracking when file is complete
+                    forwardingFiles.delete(currentFile.id);
+                }
+                
+                // Forward chunk to all other connections (broadcast)
+                forwardDataToOthers(data, connId, currentFile.id);
+            } else {
+                // Received binary data but no current file - might be a forwarded chunk
+                // Try to find the file in any connection
+                let foundFile = null;
+                for (const [cid, fileList] of filesByConnection.entries()) {
+                    foundFile = fileList.find(f => f.status === 'receiving');
+                    if (foundFile) break;
+                }
+                
+                if (foundFile) {
+                    // This is a forwarded chunk for an existing file
+                    foundFile.buffer.push(data);
+                    foundFile.receivedSize += data.byteLength;
+                    const percent = Math.min(100, Math.floor((foundFile.receivedSize / foundFile.size) * 100));
+                    updateFileProgress(foundFile, percent);
+                    
+                    if (foundFile.receivedSize === foundFile.size) {
+                        finalizeDownload(foundFile);
+                        forwardingFiles.delete(foundFile.id);
+                    }
+                    
+                    // Forward to others
+                    forwardDataToOthers(data, connId, foundFile.id);
                 }
             }
+        }
+
+        function forwardDataToOthers(data, senderConnId, fileId) {
+            // Forward data to all other connections except the sender
+            // This creates a mesh network where all devices receive all files
+            connections.forEach((connInfo, connId) => {
+                if (connId !== senderConnId && connInfo.connection.open) {
+                    try {
+                        connInfo.connection.send(data);
+                    } catch (err) {
+                        console.error('Error forwarding data:', err);
+                    }
+                }
+            });
         }
 
         function createFileCard(file) {
@@ -587,14 +712,16 @@
             fileCard.className = 'file-card';
             fileCard.id = `file-card-${file.id}`;
             
-            const deviceInfo = connections.get(file.connId)?.peer || 'Unknown Device';
+            // Get device fingerprint/identity
+            const deviceFingerprint = file.sourceDeviceFingerprint || file.sourceDeviceId || 'Unknown';
+            const displayFingerprint = deviceFingerprint.length > 12 ? deviceFingerprint.substring(0, 12) : deviceFingerprint;
             
             fileCard.innerHTML = `
                 <div class="file-meta">
                     <div class="file-name">${escapeHtml(file.name)}</div>
                     <div class="file-size">${formatBytes(file.size)}</div>
                     <div style="font-size: 0.8rem; color: var(--text-sub); margin-top: 5px;">
-                        From: ${deviceInfo.substring(0, 8)}...
+                        From: <span style="font-family: monospace; color: var(--primary);">${displayFingerprint}</span>
                     </div>
                 </div>
                 
@@ -664,8 +791,13 @@
         }
 
         // --- UTILS ---
-        async function shareLink() {
-            const shareUrl = document.getElementById('share-link').textContent;
+        async function shareLink(event) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            
+            const shareUrl = document.getElementById('share-link').textContent.trim();
             const btn = document.getElementById('share-btn');
             const originalText = btn.textContent;
 
@@ -690,6 +822,7 @@
                 // Fallback to clipboard copy if Web Share API is not available
                 fallbackCopy(shareUrl, btn, originalText);
             }
+            return false;
         }
 
         async function fallbackCopy(text, btn, originalText) {
