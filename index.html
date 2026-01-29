@@ -74,8 +74,196 @@
             gap: 40px;
         }
 
+        /* Mode Selector */
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            background: var(--surface);
+            padding: 8px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            color: var(--text-sub);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .mode-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .mode-btn:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+        }
+
+        .mode-section {
+            display: none;
+            width: 100%;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .mode-section.active {
+            display: block;
+        }
+
         @media (max-width: 768px) {
-            .split-view { grid-template-columns: 1fr; }
+            .split-view { 
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .mode-selector {
+                max-width: 100%;
+                padding: 6px;
+            }
+
+            .mode-btn {
+                padding: 10px 16px;
+                font-size: 0.85rem;
+            }
+
+            .panel {
+                padding: 20px;
+                min-height: 300px;
+            }
+
+            .chat-container {
+                height: 400px;
+                max-height: 60vh;
+            }
+
+            .chat-header {
+                padding: 15px;
+            }
+
+            .chat-messages {
+                padding: 15px;
+            }
+
+            .message {
+                max-width: 85%;
+            }
+
+            .chat-input-area {
+                padding: 15px;
+                flex-wrap: wrap;
+            }
+
+            .chat-input-wrapper {
+                width: 100%;
+            }
+
+            .chat-actions {
+                width: 100%;
+                justify-content: space-between;
+                margin-top: 10px;
+                gap: 8px;
+            }
+
+            .chat-btn {
+                flex: 1;
+                padding: 10px 16px;
+                font-size: 0.9rem;
+                min-width: 0;
+            }
+
+            .chat-btn.secondary {
+                flex: 0 0 auto;
+                width: 44px;
+                padding: 10px;
+            }
+
+            header {
+                padding: 15px;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            h1 {
+                font-size: 1.1rem;
+            }
+
+            .connection-status {
+                font-size: 0.75rem;
+                padding: 5px 12px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            main {
+                padding: 0 15px;
+            }
+
+            .panel {
+                padding: 15px;
+            }
+
+            .upload-area {
+                padding: 20px 15px;
+            }
+
+            .upload-icon {
+                font-size: 2.5rem;
+            }
+
+            .chat-container {
+                height: 350px;
+                border-radius: 12px;
+            }
+
+            .chat-header {
+                padding: 12px;
+                font-size: 0.9rem;
+            }
+
+            .chat-messages {
+                padding: 12px;
+                gap: 12px;
+            }
+
+            .message {
+                max-width: 90%;
+            }
+
+            .message-content {
+                padding: 10px 14px;
+                font-size: 0.9rem;
+            }
+
+            .file-card {
+                padding: 15px;
+            }
+
+            .mode-selector {
+                margin-bottom: 20px;
+            }
+
+            .mode-btn {
+                padding: 8px 12px;
+                font-size: 0.8rem;
+            }
+
+            .chat-input {
+                font-size: 16px; /* Prevents zoom on iOS */
+            }
         }
 
         /* Panels */
@@ -257,9 +445,9 @@
 
         /* --- CHAT SECTION --- */
         .chat-section {
-            margin-top: 40px;
             width: 100%;
             max-width: 1000px;
+            margin: 0 auto;
         }
 
         .chat-container {
@@ -527,7 +715,19 @@
 
     <!-- Main Transfer Interface -->
     <main id="transfer-ui">
-        <div class="split-view">
+        <!-- Mode Selector -->
+        <div class="mode-selector" style="margin: 0 auto 30px;">
+            <button class="mode-btn active" id="mode-file" data-mode="file">
+                📁 File Exchange
+            </button>
+            <button class="mode-btn" id="mode-chat" data-mode="chat">
+                💬 Chat
+            </button>
+        </div>
+
+        <!-- File Exchange Mode -->
+        <div class="mode-section active" id="file-mode">
+            <div class="split-view">
             
             <!-- LEFT: UPLOAD -->
             <div class="panel upload-section">
@@ -579,11 +779,12 @@
                     <!-- Files will be dynamically added here -->
                 </div>
             </div>
-
+        </div>
         </div>
 
-        <!-- CHAT SECTION -->
-        <div class="chat-section">
+        <!-- Chat Mode -->
+        <div class="mode-section" id="chat-mode">
+            <div class="chat-section">
             <div class="chat-container">
                 <div class="chat-header">
                     <span class="panel-title">💬 Live Chat</span>
@@ -665,6 +866,36 @@
         const transferUI = document.getElementById('transfer-ui');
         const statusBadge = document.getElementById('status-badge');
         const statusText = document.getElementById('status-text');
+
+        // Mode switching
+        const modeFileBtn = document.getElementById('mode-file');
+        const modeChatBtn = document.getElementById('mode-chat');
+        const fileModeSection = document.getElementById('file-mode');
+        const chatModeSection = document.getElementById('chat-mode');
+        let currentMode = 'file'; // Default to file mode
+
+        // Mode switching handlers
+        modeFileBtn.addEventListener('click', () => switchMode('file'));
+        modeChatBtn.addEventListener('click', () => switchMode('chat'));
+
+        function switchMode(mode) {
+            if (currentMode === mode) return;
+            
+            currentMode = mode;
+            
+            // Update button states
+            if (mode === 'file') {
+                modeFileBtn.classList.add('active');
+                modeChatBtn.classList.remove('active');
+                fileModeSection.classList.add('active');
+                chatModeSection.classList.remove('active');
+            } else {
+                modeChatBtn.classList.add('active');
+                modeFileBtn.classList.remove('active');
+                chatModeSection.classList.add('active');
+                fileModeSection.classList.remove('active');
+            }
+        }
 
         // --- Init PeerJS ---
         const urlParams = new URLSearchParams(window.location.search);
